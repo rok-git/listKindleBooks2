@@ -40,8 +40,17 @@ Xcode and Xcode command-line tools must be installed.
 Build with:
 
 ```sh
-clang -fobjc-arc -framework Foundation listKindleBooks2.m -lsqlite3 -o listKindleBooks2
+make
 ```
+
+Install with:
+
+```sh
+sudo make install
+```
+
+This installs `listKindleBooks2` into `/usr/local/bin`.
+If `/usr/local/bin` is in your `PATH`, you can run `listKindleBooks2` without `./`.
 
 ### How to use
 
@@ -52,25 +61,31 @@ If no database path is supplied, `listKindleBooks2` reads from the default curre
 Example:
 
 ```sh
-./listKindleBooks2 > ./kindle.csv
+listKindleBooks2 > ./kindle.csv
 ```
 
 You can specify a database file as an argument:
 
 ```sh
-./listKindleBooks2 /path/to/BookData.sqlite
+listKindleBooks2 /path/to/BookData.sqlite
 ```
 
 Use `-h` to print a header line:
 
 ```sh
-./listKindleBooks2 -h > ./kindle.csv
+listKindleBooks2 -h > ./kindle.csv
 ```
 
 Use `-f "Separator"` to specify the field separator:
 
 ```sh
-./listKindleBooks2 -h -f ';' > ./kindle.csv
+listKindleBooks2 -h -f ';' > ./kindle.csv
+```
+
+Use `-c` to add a `Collections` column to the output:
+
+```sh
+listKindleBooks2 -h -c > ./kindle.csv
 ```
 
 Options can be combined with a custom database path:
@@ -79,12 +94,20 @@ Options can be combined with a custom database path:
 ./listKindleBooks2 -h -f ';' /path/to/BookData.sqlite
 ```
 
+It can also be combined with other options:
+
+```sh
+listKindleBooks2 -h -f ';' -c /path/to/BookData.sqlite
+```
+
 ## Output Notes
 
 - Output is UTF-8 text.
 - Fields are always double-quoted.
 - The separator is `,` by default and can be changed with `-f`.
 - The program currently outputs all rows in `ZBOOK` where `ZDISPLAYTITLE` is not `NULL`, including dictionaries and other content types.
+- If `-c` is specified, the program adds a `Collections` column using `ZCOLLECTIONITEM` and `ZCOLLECTIONV2`.
+- If a book belongs to multiple collections, their names are joined with ` | ` inside the field.
 
 ## Others
 
@@ -93,11 +116,11 @@ Apple Numbers can read UTF-8 CSV directly in most cases.
 If you need Shift_JIS for Excel in a Japanese environment, you can convert the output like this:
 
 ```sh
-./listKindleBooks2 -h | iconv -c -f UTF-8 -t SJIS > ./kindle.csv
+listKindleBooks2 -h | iconv -c -f UTF-8 -t SJIS > ./kindle.csv
 ```
 
 Or, if `nkf` is installed:
 
 ```sh
-./listKindleBooks2 -h | nkf -Ws > ./kindle.csv
+listKindleBooks2 -h | nkf -Ws > ./kindle.csv
 ```

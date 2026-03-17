@@ -6,7 +6,7 @@ TARGET := listKindleBooks2
 SRC := listKindleBooks2.m
 BINDIR := /usr/local/bin
 
-.PHONY: all clean
+.PHONY: all clean install
 
 all: $(TARGET)
 
@@ -16,6 +16,6 @@ $(TARGET): $(SRC)
 clean:
 	rm -f $(TARGET) *.o
 
-
-install:    $(TARGET)
+install: $(TARGET)
+	install -d $(BINDIR)
 	install $(TARGET) $(BINDIR)

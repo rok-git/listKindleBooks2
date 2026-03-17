@@ -123,7 +123,7 @@ static NSString *QuotedField(NSString *value) {
 }
 
 static void PrintUsage(const char *programName) {
-    fprintf(stderr, "Usage: %s [-h] [-f separator] [database_path]\n", programName);
+    fprintf(stderr, "Usage: %s [-h] [-c] [-f separator] [database_path]\n", programName);
 }
 
 int main(int argc, const char * argv[]) {
@@ -131,6 +131,7 @@ int main(int argc, const char * argv[]) {
         [NSKeyedUnarchiver setClass:SyncMetadataAttributes.class forClassName:@"SyncMetadataAttributes"];
 
         BOOL printHeader = NO;
+        BOOL includeCollections = NO;
         NSString *separator = @",";
         NSString *databasePath = @"~/Library/Containers/com.amazon.Lassen/Data/Library/Protected/BookData.sqlite";
 
@@ -147,6 +148,10 @@ int main(int argc, const char * argv[]) {
                 }
                 i += 1;
                 separator = [NSString stringWithUTF8String:argv[i]];
+                continue;
+            }
+            if ([arg isEqualToString:@"-c"]) {
+                includeCollections = YES;
                 continue;
             }
             if ([arg hasPrefix:@"-"]) {
@@ -173,11 +178,25 @@ int main(int argc, const char * argv[]) {
 
         sqlite3_busy_timeout(db, 3000);
 
-        NSString *sql =
-            @"SELECT ZDISPLAYTITLE, ZSORTTITLE, ZBOOKID, ZRAWPUBLISHER, ZSYNCMETADATAATTRIBUTES "
-             "FROM ZBOOK "
-             "WHERE ZDISPLAYTITLE IS NOT NULL "
-             "ORDER BY Z_PK;";
+        NSString *sql = nil;
+        if (includeCollections) {
+            sql =
+                @"SELECT b.ZDISPLAYTITLE, b.ZSORTTITLE, b.ZBOOKID, b.ZRAWPUBLISHER, "
+                 "       b.ZSYNCMETADATAATTRIBUTES, "
+                 "       COALESCE(group_concat(c.ZNAME, ' | '), '') "
+                 "FROM ZBOOK b "
+                 "LEFT JOIN ZCOLLECTIONITEM ci ON ci.ZBOOK = b.Z_PK "
+                 "LEFT JOIN ZCOLLECTIONV2 c ON c.Z_PK = ci.ZCOLLECTION "
+                 "WHERE b.ZDISPLAYTITLE IS NOT NULL "
+                 "GROUP BY b.Z_PK, b.ZDISPLAYTITLE, b.ZSORTTITLE, b.ZBOOKID, b.ZRAWPUBLISHER, b.ZSYNCMETADATAATTRIBUTES "
+                 "ORDER BY b.Z_PK;";
+        } else {
+            sql =
+                @"SELECT ZDISPLAYTITLE, ZSORTTITLE, ZBOOKID, ZRAWPUBLISHER, ZSYNCMETADATAATTRIBUTES "
+                 "FROM ZBOOK "
+                 "WHERE ZDISPLAYTITLE IS NOT NULL "
+                 "ORDER BY Z_PK;";
+        }
 
         sqlite3_stmt *statement = NULL;
         int prepareResult = sqlite3_prepare_v2(db, sql.UTF8String, -1, &statement, NULL);
@@ -188,7 +207,7 @@ int main(int argc, const char * argv[]) {
         }
 
         if (printHeader) {
-            NSArray<NSString *> *headers = @[
+            NSMutableArray<NSString *> *headers = [NSMutableArray arrayWithArray:@[
                 @"ASIN",
                 @"Title",
                 @"Author",
@@ -197,7 +216,10 @@ int main(int argc, const char * argv[]) {
                 @"Date Purchased",
                 @"Pronunciation of Title",
                 @"Pronunciation of Author",
-            ];
+            ]];
+            if (includeCollections) {
+                [headers addObject:@"Collections"];
+            }
             NSMutableArray<NSString *> *quotedHeaders = [NSMutableArray arrayWithCapacity:headers.count];
             for (NSString *header in headers) {
                 [quotedHeaders addObject:QuotedField(header)];
@@ -235,7 +257,7 @@ int main(int argc, const char * argv[]) {
                 ? attributes[@"purchase_date"] : @"";
             NSString *pronunciationOfAuthor = author;
 
-            NSArray<NSString *> *fields = @[
+            NSMutableArray<NSString *> *fields = [NSMutableArray arrayWithArray:@[
                 QuotedField(asin ?: @""),
                 QuotedField(title),
                 QuotedField(author),
@@ -244,7 +266,11 @@ int main(int argc, const char * argv[]) {
                 QuotedField(purchaseDate),
                 QuotedField(sortTitle),
                 QuotedField(pronunciationOfAuthor ?: @""),
-            ];
+            ]];
+            if (includeCollections) {
+                NSString *collections = NullableText(statement, 5) ?: @"";
+                [fields addObject:QuotedField(collections)];
+            }
             puts([[fields componentsJoinedByString:separator] UTF8String]);
         }
 
