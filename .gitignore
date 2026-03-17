@@ -12,3 +12,4 @@ BookData.sqlite-wal
 
 # Local scratch files
 *.tmp
+*.swp
