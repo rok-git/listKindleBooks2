@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Build outputs
+listKindleBooks2
+*.o
+
+# Local Kindle database copies
+BookData.sqlite
+BookData.sqlite-shm
+BookData.sqlite-wal
+
+# Local scratch files
+*.tmp
