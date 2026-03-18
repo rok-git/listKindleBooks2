@@ -29,7 +29,7 @@ Internally, most book metadata comes from the `ZBOOK` table and the `ZSYNCMETADA
 - `Pronunciation of Title` is taken from `ZSORTTITLE`.
 - A readable `Pronunciation of Author` could not be found in the current SQLite database. At the moment this program outputs the `Author` value again in that column.
 
-For more details about the database structure and investigation results, see [README_KINDLE_DB.md](/Users/rok/work/objc/listKindleBooks_Codex/README_KINDLE_DB.md).
+For more details about the database structure and investigation results, see [README_KINDLE_DB.md](README_KINDLE_DB.md).
 
 ## How?
 
@@ -91,7 +91,7 @@ listKindleBooks2 -h -c > ./kindle.csv
 Options can be combined with a custom database path:
 
 ```sh
-./listKindleBooks2 -h -f ';' /path/to/BookData.sqlite
+listKindleBooks2 -h -f ';' /path/to/BookData.sqlite
 ```
 
 It can also be combined with other options:

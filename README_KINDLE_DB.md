@@ -211,9 +211,9 @@
 
 このディレクトリには確認用の Objective-C サンプルがある。
 
-- [ListNonDictionaryBooks.m](/Users/rok/work/objc/listKindleBooks_Codex/examples/ListNonDictionaryBooks.m)
+- [ListNonDictionaryBooks.m](examples/ListNonDictionaryBooks.m)
   - 通常書籍 20 件を表示
-- [ExportBooksCSV.m](/Users/rok/work/objc/listKindleBooks_Codex/examples/ExportBooksCSV.m)
+- [ExportBooksCSV.m](examples/ExportBooksCSV.m)
   - 旧フォーマット互換の CSV を出力
 
 ビルド例:
