@@ -9,6 +9,7 @@ listKindleBooks2
 BookData.sqlite
 BookData.sqlite-shm
 BookData.sqlite-wal
+kindledb.sql
 
 # Local scratch files
 *.tmp

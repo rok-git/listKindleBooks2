@@ -5,8 +5,10 @@ LIBS := -lsqlite3
 TARGET := listKindleBooks2
 SRC := listKindleBooks2.m
 BINDIR := /usr/local/bin
+DB_PATH := $(HOME)/Library/Containers/com.amazon.Lassen/Data/Library/Protected/BookData.sqlite
+SCHEMA_OUT := kindledb.sql
 
-.PHONY: all clean install
+.PHONY: all clean install schema
 
 all: $(TARGET)
 
@@ -19,3 +21,6 @@ clean:
 install: $(TARGET)
 	install -d $(BINDIR)
 	install $(TARGET) $(BINDIR)
+
+schema:
+	sqlite3 "$(DB_PATH)" ".schema" > "$(SCHEMA_OUT)"

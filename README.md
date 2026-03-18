@@ -43,6 +43,12 @@ Build with:
 make
 ```
 
+Generate a local schema dump, if needed:
+
+```sh
+make schema
+```
+
 Install with:
 
 ```sh
@@ -51,6 +57,12 @@ sudo make install
 
 This installs `listKindleBooks2` into `/usr/local/bin`.
 If `/usr/local/bin` is in your `PATH`, you can run `listKindleBooks2` without `./`.
+
+The `schema` target writes `kindledb.sql` by extracting `.schema` from the current Kindle database at:
+
+`~/Library/Containers/com.amazon.Lassen/Data/Library/Protected/BookData.sqlite`
+
+`kindledb.sql` is treated as a local generated file and is not intended to be part of the distributed repository contents.
 
 ### How to use
 
