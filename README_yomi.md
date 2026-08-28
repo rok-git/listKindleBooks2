@@ -135,9 +135,11 @@ SELECT b.Z_PK,
 
 1. `ZGROUPITEM` を介して関連付けた `ZGROUP.ZSORTAUTHOR` を使用する。
 2. 単著の `ZGROUP.ZDISPLAYAUTHOR` と `ZGROUP.ZSORTAUTHOR` から作った一意な対応表を、書籍の著者名に適用する。
-3. 読みを得られなければ、現在の `listKindleBooks2` と同様に著者名をそのまま代用するか、空欄にする。
+3. 読みを得られなければ空欄にする。
 
 この方法は推定や外部辞書による読み生成ではなく、現在の Kindle データベース内に平文で保存されている情報だけを再利用する。ただし、シリーズ情報がない著者には適用できない。
+
+`listKindleBooks2` では `-y` を指定したときだけこの手順で `Pronunciation of Author` を補完する。`-y` を指定しない場合、および信頼できる読みを取得できない場合は、このフィールドを空欄にする。
 
 ## 未解決事項
 

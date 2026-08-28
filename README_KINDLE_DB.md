@@ -126,7 +126,8 @@ make schema
 - `Pronunciation of Title`
   - `ZSORTTITLE`
 - `Pronunciation of Author`
-  - 現行DBでは可読な読みを確認できず、代用として `Author` をそのまま使うのが現実的
+  - 通常は空欄
+  - `-y` 指定時は、`ZGROUPITEM` を介して関連付けた `ZGROUP.ZSORTAUTHOR`、または単著グループから作成した一意な著者名・読み対応表を使用
 
 ## タイトル読み
 
@@ -143,9 +144,9 @@ make schema
 
 ## 著者読みについて
 
-### 結論
+### 当初の調査結果
 
-現行DBでは、可読な著者読み文字列は見つからなかった。
+`ZBOOK` の著者関連カラムからは、可読な著者読み文字列を直接取得できなかった。
 
 たとえば:
 
@@ -197,7 +198,7 @@ make schema
 - 複数著者本のトークンを、同じ著者の単著本の `ZDISPLAYAUTHOR` / `ZSORTAUTHOR` と照合しても一致しなかった
 - つまり「著者ごとの固定トークンを単純連結している」だけではなさそう
 
-現時点では、`ZSORTAUTHOR` は「可読な著者読み」ではなく、内部ソートキー列と考えるのが安全。
+Core Data モデルの追加調査により、`ZBOOK.ZSORTAUTHOR` は暗号化された文字列と考えられることが分かった。一方、`ZGROUP.ZSORTAUTHOR` には平文の読みがあり、一部の書籍に利用できる。詳細は [README_yomi.md](README_yomi.md) を参照。
 
 ## `strings` での確認
 
@@ -241,5 +242,6 @@ clang -fobjc-arc -framework Foundation examples/ExportBooksCSV.m -lsqlite3 -o ex
 ## 現時点の安全な扱い
 
 - `Pronunciation of Title` は `ZSORTTITLE` を使う
-- `Pronunciation of Author` は現行DBからは可読な読みを取れない前提にする
-- CSV互換が必要なら、`Pronunciation of Author` は空欄か `Author` の代用にする
+- `Pronunciation of Author` は通常は空欄にする
+- `-y` 指定時は、`ZGROUP` から信頼できる読みを取得できた書籍だけ出力する
+- 読みを取得できない場合は、著者名で代用せず空欄にする

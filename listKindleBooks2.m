@@ -64,24 +64,28 @@ static NSDictionary *AttributesFromMetadataBlob(NSData *blob) {
     return nil;
 }
 
-static NSString *FlattenAuthorValue(id authors) {
+static NSArray<NSString *> *AuthorNamesFromValue(id authors) {
     if ([authors isKindOfClass:[NSDictionary class]]) {
-        return FlattenAuthorValue(((NSDictionary *)authors)[@"author"]);
+        return AuthorNamesFromValue(((NSDictionary *)authors)[@"author"]);
     }
     if ([authors isKindOfClass:[NSString class]]) {
-        return authors;
+        NSString *name = [(NSString *)authors stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        return name.length > 0 ? @[name] : @[];
     }
     if ([authors isKindOfClass:[NSArray class]]) {
         NSMutableArray<NSString *> *names = [NSMutableArray array];
         for (id item in (NSArray *)authors) {
-            NSString *name = FlattenAuthorValue(item);
-            if (name.length > 0) {
-                [names addObject:name];
-            }
+            [names addObjectsFromArray:AuthorNamesFromValue(item)];
         }
-        return names.count > 0 ? [names componentsJoinedByString:@", "] : nil;
+        return names;
     }
-    return nil;
+    return @[];
+}
+
+static NSString *FlattenAuthorValue(id authors) {
+    NSArray<NSString *> *names = AuthorNamesFromValue(authors);
+    return names.count > 0 ? [names componentsJoinedByString:@", "] : nil;
 }
 
 static NSString *FlattenPublisherValue(id publishers) {
@@ -122,8 +126,114 @@ static NSString *QuotedField(NSString *value) {
     return [NSString stringWithFormat:@"\"%@\"", escaped];
 }
 
+static BOOL LoadAuthorPronunciations(
+    sqlite3 *db,
+    NSDictionary<NSNumber *, NSString *> **bookPronunciations,
+    NSDictionary<NSString *, NSString *> **authorPronunciations
+) {
+    NSMutableDictionary<NSNumber *, NSMutableSet<NSString *> *> *bookCandidates =
+        [NSMutableDictionary dictionary];
+    const char *bookSQL =
+        "SELECT gi.ZBOOK, g.ZSORTAUTHOR "
+        "FROM ZGROUPITEM gi "
+        "JOIN ZGROUP g ON g.Z_PK = gi.ZPARENTCONTAINER "
+        "WHERE g.ZSORTAUTHOR IS NOT NULL AND trim(g.ZSORTAUTHOR) <> ''";
+    sqlite3_stmt *statement = NULL;
+    if (sqlite3_prepare_v2(db, bookSQL, -1, &statement, NULL) != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare author pronunciation query: %s\n", sqlite3_errmsg(db));
+        return NO;
+    }
+
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        NSNumber *bookPK = @(sqlite3_column_int64(statement, 0));
+        NSString *reading = [NullableText(statement, 1) stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (reading.length == 0) {
+            continue;
+        }
+        NSMutableSet<NSString *> *readings = bookCandidates[bookPK];
+        if (readings == nil) {
+            readings = [NSMutableSet set];
+            bookCandidates[bookPK] = readings;
+        }
+        [readings addObject:reading];
+    }
+    sqlite3_finalize(statement);
+
+    NSMutableDictionary<NSNumber *, NSString *> *readingsByBook = [NSMutableDictionary dictionary];
+    [bookCandidates enumerateKeysAndObjectsUsingBlock:
+        ^(NSNumber *bookPK, NSMutableSet<NSString *> *readings, BOOL *stop) {
+            (void)stop;
+            if (readings.count == 1) {
+                readingsByBook[bookPK] = readings.anyObject;
+            }
+        }];
+
+    NSMutableDictionary<NSString *, NSMutableSet<NSString *> *> *authorCandidates =
+        [NSMutableDictionary dictionary];
+    const char *authorSQL =
+        "SELECT ZDISPLAYAUTHOR, ZSORTAUTHOR "
+        "FROM ZGROUP "
+        "WHERE ZDISPLAYAUTHOR IS NOT NULL AND trim(ZDISPLAYAUTHOR) <> '' "
+        "AND ZSORTAUTHOR IS NOT NULL AND trim(ZSORTAUTHOR) <> ''";
+    statement = NULL;
+    if (sqlite3_prepare_v2(db, authorSQL, -1, &statement, NULL) != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare author reading map query: %s\n", sqlite3_errmsg(db));
+        return NO;
+    }
+
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        NSString *author = [NullableText(statement, 0) stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        NSString *reading = [NullableText(statement, 1) stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (author.length == 0 || reading.length == 0 || [author containsString:@";"]) {
+            continue;
+        }
+        NSMutableSet<NSString *> *readings = authorCandidates[author];
+        if (readings == nil) {
+            readings = [NSMutableSet set];
+            authorCandidates[author] = readings;
+        }
+        [readings addObject:reading];
+    }
+    sqlite3_finalize(statement);
+
+    NSMutableDictionary<NSString *, NSString *> *readingsByAuthor = [NSMutableDictionary dictionary];
+    [authorCandidates enumerateKeysAndObjectsUsingBlock:
+        ^(NSString *author, NSMutableSet<NSString *> *readings, BOOL *stop) {
+            (void)stop;
+            if (readings.count == 1) {
+                readingsByAuthor[author] = readings.anyObject;
+            }
+        }];
+
+    *bookPronunciations = readingsByBook;
+    *authorPronunciations = readingsByAuthor;
+    return YES;
+}
+
+static NSString *PronunciationForAuthors(
+    NSArray<NSString *> *authors,
+    NSDictionary<NSString *, NSString *> *authorPronunciations
+) {
+    if (authors.count == 0) {
+        return @"";
+    }
+
+    NSMutableArray<NSString *> *readings = [NSMutableArray arrayWithCapacity:authors.count];
+    for (NSString *author in authors) {
+        NSString *reading = authorPronunciations[author];
+        if (reading.length == 0) {
+            return @"";
+        }
+        [readings addObject:reading];
+    }
+    return [readings componentsJoinedByString:@" "];
+}
+
 static void PrintUsage(const char *programName) {
-    fprintf(stderr, "Usage: %s [-h] [-c] [-f separator] [database_path]\n", programName);
+    fprintf(stderr, "Usage: %s [-h] [-c] [-y] [-f separator] [database_path]\n", programName);
 }
 
 int main(int argc, const char * argv[]) {
@@ -132,6 +242,7 @@ int main(int argc, const char * argv[]) {
 
         BOOL printHeader = NO;
         BOOL includeCollections = NO;
+        BOOL includeAuthorPronunciations = NO;
         NSString *separator = @",";
         NSString *databasePath = @"~/Library/Containers/com.amazon.Lassen/Data/Library/Protected/BookData.sqlite";
 
@@ -152,6 +263,10 @@ int main(int argc, const char * argv[]) {
             }
             if ([arg isEqualToString:@"-c"]) {
                 includeCollections = YES;
+                continue;
+            }
+            if ([arg isEqualToString:@"-y"]) {
+                includeAuthorPronunciations = YES;
                 continue;
             }
             if ([arg hasPrefix:@"-"]) {
@@ -178,12 +293,20 @@ int main(int argc, const char * argv[]) {
 
         sqlite3_busy_timeout(db, 3000);
 
+        NSDictionary<NSNumber *, NSString *> *bookPronunciations = @{};
+        NSDictionary<NSString *, NSString *> *authorPronunciations = @{};
+        if (includeAuthorPronunciations &&
+            !LoadAuthorPronunciations(db, &bookPronunciations, &authorPronunciations)) {
+            sqlite3_close(db);
+            return 1;
+        }
+
         NSString *sql = nil;
         if (includeCollections) {
             sql =
                 @"SELECT b.ZDISPLAYTITLE, b.ZSORTTITLE, b.ZBOOKID, b.ZRAWPUBLISHER, "
                  "       b.ZSYNCMETADATAATTRIBUTES, "
-                 "       COALESCE(group_concat(c.ZNAME, ' | '), '') "
+                 "       b.Z_PK, COALESCE(group_concat(c.ZNAME, ' | '), '') "
                  "FROM ZBOOK b "
                  "LEFT JOIN ZCOLLECTIONITEM ci ON ci.ZBOOK = b.Z_PK "
                  "LEFT JOIN ZCOLLECTIONV2 c ON c.Z_PK = ci.ZCOLLECTION "
@@ -192,7 +315,7 @@ int main(int argc, const char * argv[]) {
                  "ORDER BY b.Z_PK;";
         } else {
             sql =
-                @"SELECT ZDISPLAYTITLE, ZSORTTITLE, ZBOOKID, ZRAWPUBLISHER, ZSYNCMETADATAATTRIBUTES "
+                @"SELECT ZDISPLAYTITLE, ZSORTTITLE, ZBOOKID, ZRAWPUBLISHER, ZSYNCMETADATAATTRIBUTES, Z_PK "
                  "FROM ZBOOK "
                  "WHERE ZDISPLAYTITLE IS NOT NULL "
                  "ORDER BY Z_PK;";
@@ -245,6 +368,7 @@ int main(int argc, const char * argv[]) {
                 asin = [bookID substringWithRange:NSMakeRange(2, bookID.length - 4)];
             }
 
+            NSArray<NSString *> *authorNames = AuthorNamesFromValue(attributes[@"authors"]);
             NSString *author = FlattenAuthorValue(attributes[@"authors"]) ?: @"";
             NSString *publisher = FlattenPublisherValue(attributes[@"publishers"]);
             if (publisher.length == 0) {
@@ -255,7 +379,14 @@ int main(int argc, const char * argv[]) {
                 ? attributes[@"publication_date"] : @"";
             NSString *purchaseDate = [attributes[@"purchase_date"] isKindOfClass:[NSString class]]
                 ? attributes[@"purchase_date"] : @"";
-            NSString *pronunciationOfAuthor = author;
+            NSNumber *bookPK = @(sqlite3_column_int64(statement, 5));
+            NSString *pronunciationOfAuthor = @"";
+            if (includeAuthorPronunciations) {
+                pronunciationOfAuthor = bookPronunciations[bookPK];
+                if (pronunciationOfAuthor.length == 0) {
+                    pronunciationOfAuthor = PronunciationForAuthors(authorNames, authorPronunciations);
+                }
+            }
 
             NSMutableArray<NSString *> *fields = [NSMutableArray arrayWithArray:@[
                 QuotedField(asin ?: @""),
@@ -268,7 +399,7 @@ int main(int argc, const char * argv[]) {
                 QuotedField(pronunciationOfAuthor ?: @""),
             ]];
             if (includeCollections) {
-                NSString *collections = NullableText(statement, 5) ?: @"";
+                NSString *collections = NullableText(statement, 6) ?: @"";
                 [fields addObject:QuotedField(collections)];
             }
             puts([[fields componentsJoinedByString:separator] UTF8String]);
